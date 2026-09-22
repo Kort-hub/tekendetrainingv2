@@ -83,6 +83,7 @@ select {
 .custom-text-box {
     position: absolute; transform: translate(-50%, -50%); background: rgba(255, 255, 255, 0.9);
     width: 70px; min-width: 70px; box-sizing: border-box; border: 1px solid #cbd5e1; padding: 3px 6px;
+    min-height: 24px; max-width: 240px; overflow-wrap: break-word; resize: none; line-height: 1.25;
     border-radius: 4px; font-size: 10px; font-weight: 700; color: #0f172a; cursor: grab; z-index: 15;
     box-shadow: 0 1px 3px rgba(0,0,0,0.2); outline: none;
 }
