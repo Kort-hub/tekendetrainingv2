@@ -9,6 +9,93 @@ let dragItem = null;
 let isDrawing = false;
 let currentPath = null;
 let drawStartX = 0;
+const storageKey = 'training-app-v2-state';
+
+let isRestoring = false;
+function saveState() {
+    if (isRestoring) return;
+    const state = {
+        fieldsCount: document.getElementById('fields-count-select').value,
+        snapEnabled,
+        playerName: document.getElementById('player-name-input').value,
+        notes: document.getElementById('notes-area').value,
+        counts,
+        fields: Array.from(document.querySelectorAll('.field')).map(field => ({
+            items: Array.from(field.querySelectorAll('.item')).map(item => item.outerHTML),
+            texts: Array.from(field.querySelectorAll('.custom-text-box')).map(text => ({
+                value: text.value,
+                html: text.outerHTML
+            })),
+            paths: Array.from(field.querySelectorAll('.draw-layer path:not(defs path)')).map(path => path.outerHTML)
+        }))
+    };
+    localStorage.setItem(storageKey, JSON.stringify(state));
+}
+
+function bindItemListeners(el) {
+    el.addEventListener('mousedown', startDrag);
+    el.addEventListener('touchstart', startDrag, {passive: false});
+    if (el.classList.contains('goal-shape')) {
+        el.addEventListener('contextmenu', rotateGoal);
+        el.addEventListener('dblclick', rotateGoal);
+    }
+}
+
+function bindTextListeners(textEl) {
+    textEl.addEventListener('mousedown', startDrag);
+    textEl.addEventListener('touchstart', startDrag, {passive: false});
+    textEl.addEventListener('input', () => {
+        resizeCustomTextBox(textEl);
+        saveState();
+    });
+}
+
+function loadState() {
+    const saved = localStorage.getItem(storageKey);
+    if (!saved) return;
+
+    isRestoring = true;
+    try {
+        const state = JSON.parse(saved);
+        document.getElementById('fields-count-select').value = state.fieldsCount || '1';
+        changeFieldsCount();
+        document.getElementById('player-name-input').value = state.playerName || '';
+        document.getElementById('notes-area').value = state.notes || '';
+        autoResizeTextarea();
+
+        if (state.snapEnabled) toggleSnap();
+        counts = state.counts || counts;
+        (state.fields || []).forEach((fieldState, index) => {
+            const field = document.getElementById(`field-${index + 1}`);
+            if (!field) return;
+            fieldState.items.forEach(html => {
+                field.insertAdjacentHTML('beforeend', html);
+                bindItemListeners(field.lastElementChild);
+            });
+            fieldState.texts.forEach(textState => {
+                field.insertAdjacentHTML('beforeend', textState.html);
+                let textEl = field.lastElementChild;
+                if (textEl.tagName === 'INPUT') {
+                    const replacement = document.createElement('textarea');
+                    replacement.className = textEl.className;
+                    replacement.style.cssText = textEl.style.cssText;
+                    replacement.dataset.category = textEl.dataset.category || '';
+                    textEl.replaceWith(replacement);
+                    textEl = replacement;
+                }
+                textEl.value = textState.value;
+                bindTextListeners(textEl);
+                resizeCustomTextBox(textEl);
+            });
+            fieldState.paths.forEach(html => field.querySelector('.draw-layer').insertAdjacentHTML('beforeend', html));
+        });
+        updateLegend();
+    } catch (error) {
+        localStorage.removeItem(storageKey);
+    } finally {
+        isRestoring = false;
+    }
+}
 let drawStartY = 0;
 let activeField = null;
 
@@ -16,12 +103,14 @@ function changeFieldsCount() {
     const val = document.getElementById('fields-count-select').value;
     document.getElementById('wrapper-2').style.display = (val >= 2) ? 'block' : 'none';
     document.getElementById('wrapper-3').style.display = (val >= 3) ? 'block' : 'none';
+    saveState();
 }
 
 function autoResizeTextarea() {
     const el = document.getElementById('notes-area');
     el.style.height = 'auto';
     el.style.height = (el.scrollHeight) + 2 + 'px';
+    saveState();
 }
 
 function toggleSnap() {
@@ -36,6 +125,7 @@ function toggleSnap() {
         btn.style.backgroundColor = '';
         btn.style.color = '';
     }
+    saveState();
 }
 
 function openInfo() { document.getElementById('info-modal').style.display = 'flex'; }
@@ -69,19 +159,24 @@ function resizeCustomTextBox(textEl) {
     const styles = getComputedStyle(textEl);
     measurement.style.position = 'absolute';
     measurement.style.visibility = 'hidden';
-    measurement.style.whiteSpace = 'nowrap';
+    measurement.style.whiteSpace = 'pre-wrap';
+    measurement.style.display = 'inline-block';
+    measurement.style.maxWidth = '240px';
+    measurement.style.overflowWrap = 'break-word';
     measurement.style.font = styles.font;
     measurement.style.letterSpacing = styles.letterSpacing;
     measurement.style.padding = styles.padding;
     measurement.style.border = styles.border;
     measurement.textContent = textEl.value || ' ';
     if (!measurement.parentElement) document.body.appendChild(measurement);
-    textEl.style.width = Math.ceil(measurement.getBoundingClientRect().width + 6) + 'px';
+    textEl.style.width = Math.min(240, Math.max(70, Math.ceil(measurement.getBoundingClientRect().width + 14))) + 'px';
+    textEl.style.height = 'auto';
+    textEl.style.height = Math.max(24, textEl.scrollHeight + 4) + 'px';
 }
 
 function placeCustomTextAt(percentX, percentY, fieldEl) {
-    const textEl = document.createElement('input');
-    textEl.type = 'text';
+    const textEl = document.createElement('textarea');
+    textEl.rows = 1;
     textEl.className = 'custom-text-box';
     textEl.value = 'Nieuwe tekst';
     if (document.getElementById('custom-text-style').value === 'transparent') {
@@ -90,13 +185,12 @@ function placeCustomTextAt(percentX, percentY, fieldEl) {
     textEl.style.left = percentX + '%';
     textEl.style.top = percentY + '%';
 
-    textEl.addEventListener('mousedown', startDrag);
-    textEl.addEventListener('touchstart', startDrag, {passive: false});
-    textEl.addEventListener('input', () => resizeCustomTextBox(textEl));
+    bindTextListeners(textEl);
 
     fieldEl.appendChild(textEl);
     resizeCustomTextBox(textEl);
     history.push({ element: textEl, category: null, isDraw: false });
+    saveState();
     textEl.focus();
     textEl.select();
 }
@@ -130,6 +224,7 @@ function createZigzagPath(x1, y1, x2, y2) {
 function deleteItem(el) {
     if (el.dataset.category) { counts[el.dataset.category]--; updateLegend(); }
     el.remove();
+    saveState();
 }
 
 document.querySelectorAll('.field').forEach(field => {
@@ -143,6 +238,7 @@ function handleFieldStart(e, fieldEl) {
     if (currentType === 'eraser') {
         if (e.target.tagName.toLowerCase() === 'path' && e.target.closest('.draw-layer')) {
             e.target.remove();
+            saveState();
         }
         return; 
     }
@@ -227,11 +323,11 @@ function placeItemAt(percentX, percentY, fieldEl) {
     }
 
     el.dataset.category = category;
-    el.addEventListener('mousedown', startDrag);
-    el.addEventListener('touchstart', startDrag, {passive: false});
+    bindItemListeners(el);
     fieldEl.appendChild(el);
     history.push({ element: el, category: category, isDraw: false });
     updateLegend();
+    saveState();
 }
 
 function rotateGoal(e) {
@@ -241,6 +337,7 @@ function rotateGoal(e) {
     currentRotation = (currentRotation + 45) % 360; 
     goal.dataset.rotation = currentRotation;
     goal.style.transform = `translate(-50%, -50%) rotate(${currentRotation}deg)`;
+    saveState();
 }
 
 function startDrag(e) {
@@ -317,8 +414,17 @@ function handleEnd(e) {
             dragItem.style.cursor = 'grab'; dragItem.style.zIndex = 10; 
         }
         setTimeout(() => { isDragging = false; dragItem = null; }, 50); 
+        saveState();
     }
-    if (isDrawing) { isDrawing = false; activeField = null; if (currentPath) { history.push({ element: currentPath, category: 'draw', isDraw: true }); currentPath = null; } }
+    if (isDrawing) {
+        isDrawing = false;
+        activeField = null;
+        if (currentPath) {
+            history.push({ element: currentPath, category: 'draw', isDraw: true });
+            currentPath = null;
+            saveState();
+        }
+    }
 }
 
 document.addEventListener('mousemove', handleMove);
@@ -333,6 +439,7 @@ function undo() {
     if (!document.body.contains(lastAction.element)) return;
     lastAction.element.remove();
     if (!lastAction.isDraw && lastAction.category) { counts[lastAction.category]--; updateLegend(); }
+    saveState();
 }
 
 function resetField() {
@@ -347,6 +454,7 @@ function resetField() {
         document.getElementById('player-name-input').value = '';
         history = []; counts = { blue: 0, yellow: 0, orange: 0, ball: 0, goal: 0, cone_red: 0, cone_blue: 0, cone_yellow: 0, cone_orange: 0, cone_green: 0, cone_white: 0 };
         updateLegend();
+        saveState();
     }
 }
 
@@ -391,3 +499,5 @@ async function exportToPDF() {
     const x = (pdfWidth - finalWidth) / 2; const y = (pdfHeight - finalHeight) / 2;
     pdf.addImage(imgData, 'JPEG', x, y, finalWidth, finalHeight); pdf.save("trainingsvorm.pdf");
 }
+
+loadState();
