@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Teken de training</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;900&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <link rel="stylesheet" href="style.css">
+    <script src="script.js" defer></script>
+</head>
+<body>
+    <h2 class="header-title">Teken de training</h2>
+    <div class="toolbar" id="toolbar">
+        <div class="toolbar-group">
+            <button onclick="selectItem('player-blue', 'blue', this)" style="border-bottom: 4px solid #3b82f6;">Blauw</button>
+            <button onclick="selectItem('player-yellow', 'yellow', this)" style="border-bottom: 4px solid #facc15;">Geel</button>
+            <button onclick="selectItem('player-orange', 'orange', this)" style="border-bottom: 4px solid #f97316;">Oranje</button>
+            <input type="text" id="player-name-input" placeholder="Naam voor hesje..." maxlength="10">
+        </div>
+        <div class="toolbar-group">
+            <button onclick="selectItem('ball', '⚽', this)">Bal</button>
+            <select id="goal-select" onchange="selectItem(this.value, this.value === 'goal-small' ? 'small' : 'large', this)" aria-label="Goal kiezen">
+                <option value="" disabled selected>Goal</option>
+                <option value="goal-small">Goal klein</option>
+                <option value="goal-large">Goal groot</option>
+            </select>
+            <select id="custom-text-style" onchange="selectCustomText(this.value)" aria-label="Tekstvakstijl">
+                <option value="" disabled selected>Tekst</option>
+                <option value="white">Tekst - Wit</option>
+                <option value="transparent">Tekst - Transparant</option>
+            </select>
+            <select id="cone-select" onchange="selectItem('cone', this.value, this)">
+                <option value="" disabled selected>Kies hoedje...</option>
+                <option value="red">Rood</option>
+                <option value="blue">Blauw</option>
+                <option value="yellow">Geel</option>
+                <option value="orange">Oranje</option>
+                <option value="green">Groen</option>
+                <option value="white">Wit</option>
+            </select>
+        </div>
+        <div class="toolbar-group">
+            <button onclick="selectItem('draw-pass', 'pass', this)">Pass ➡️</button>
+            <button onclick="selectItem('draw-run', 'run', this)">Loop ➖</button>
+            <button onclick="selectItem('draw-dribble', 'dribble', this)">Dribbel 〰️</button>
+            <button onclick="selectItem('eraser', 'eraser', this)" style="border-bottom: 4px solid #ef4444;">Gum</button>
+        </div>
+        <div class="toolbar-group" style="flex-grow: 1;">
+            <select id="fields-count-select" onchange="changeFieldsCount()" style="font-weight: 600;">
+                <option value="1">1 Veld</option>
+                <option value="2">2 Velden</option>
+                <option value="3">3 Velden</option>
+            </select>
+            <button class="action-btn" id="btn-snap" onclick="toggleSnap()">Snap: Uit</button>
+            <button class="action-btn" onclick="undo()">Undo</button>
+            <button class="action-btn" onclick="resetField()">Reset</button>
+            <button class="export-btn" onclick="exportToImage()">PNG</button>
+            <button class="export-btn" onclick="exportToPDF()">PDF</button>
+            <button class="info-btn" onclick="openInfo()">ℹ️ Info</button>
+        </div>
+    </div>
+    
+    <div id="info-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-btn" onclick="closeInfo()">&times;</span>
+            <h3>Hoe werkt deze app?</h3>
+            <ul>
+                <li><b>Velden:</b> Kies 1, 2 of 3 velden via het keuzemenu. Extra velden verschijnen onder het eerste veld.</li>
+                <li><b>Spelers:</b> Kies Blauw, Geel of Oranje en klik daarna op een veld om een hesje te plaatsen.</li>
+                <li><b>Spelersnaam:</b> Vul eerst een naam in bij "Naam voor hesje...". De naam wordt op het volgende hesje geplaatst.</li>
+                <li><b>Bal en doelen:</b> Kies Bal, Goal Klein of Goal Groot en klik op het gewenste veld.</li>
+                <li><b>Hoedjes:</b> Kies een kleur in "Kies hoedje..." en klik daarna op een veld om het hoedje te plaatsen.</li>
+                <li><b>Tekst:</b> Kies "Tekst - Wit" of "Tekst - Transparant". Klik daarna op een veld en typ de gewenste tekst.</li>
+                <li><b>Verplaatsen:</b> Sleep spelers, ballen, doelen, hoedjes en tekstvakken naar een andere plek.</li>
+                <li><b>Doelen draaien:</b> Dubbelklik of klik met de rechtermuisknop op een doel om het 45 graden te draaien.</li>
+                <li><b>Pass:</b> Kies Pass en sleep op een veld van het beginpunt naar het eindpunt.</li>
+                <li><b>Loop:</b> Kies Loop om een gestippelde looplijn te tekenen.</li>
+                <li><b>Dribbel:</b> Kies Dribbel om een zigzaglijn te tekenen.</li>
+                <li><b>Gum:</b> Kies Gum en klik op een getekende lijn om die te verwijderen.</li>
+                <li><b>Snap:</b> Zet Snap aan om geplaatste items automatisch op een raster uit te lijnen.</li>
+                <li><b>Ongedaan maken:</b> Met Undo verwijder je de laatst geplaatste speler, het laatste object, tekstvak of de laatste lijn.</li>
+                <li><b>Verwijderen:</b> Sleep een object of tekstvak naar de prullenbak op het veld.</li>
+                <li><b>Reset:</b> Verwijdert alle velden, objecten, lijnen en opmerkingen na bevestiging.</li>
+                <li><b>Opmerkingen:</b> Gebruik het tekstvak onder de velden voor uitleg of aanvullende informatie.</li>
+                <li><b>PNG:</b> Exporteert alle zichtbare velden en opmerkingen als een scherpe PNG-afbeelding.</li>
+                <li><b>PDF:</b> Exporteert alle zichtbare velden en opmerkingen als een A4-PDF in portretstand.</li>
+            </ul>
+        </div>
+    </div>
+
+    <div id="export-container">
+        
+        <div class="field-wrapper" id="wrapper-1">
+            <div class="field" id="field-1" oncontextmenu="return false;">
+                <svg class="field-logo" viewBox="0 0 500 250" xmlns="http://www.w3.org/2000/svg">
+                    <g font-style="italic" font-family="Arial, sans-serif" transform="skewX(-10)">
+                        <text x="260" y="140" font-size="110" font-weight="900" text-anchor="middle">
+                            <tspan fill="#003366">G</tspan><tspan fill="#f97316">P</tspan><tspan fill="#003366">C</tspan>
+                        </text>
+                        <text x="260" y="185" font-size="32" font-weight="800" fill="#003366" text-anchor="middle" letter-spacing="4">VLISSINGEN</text>
+                    </g>
+                    <g stroke-width="14" stroke-linecap="square">
+                        <line x1="110" y1="0" x2="160" y2="50" stroke="#f97316"/>
+                        <line x1="85" y1="25" x2="135" y2="75" stroke="#003366"/>
+                        <line x1="370" y1="175" x2="420" y2="225" stroke="#f97316"/>
+                        <line x1="345" y1="200" x2="395" y2="250" stroke="#003366"/>
+                    </g>
+                </svg>
+                <div class="pitch-lines">
+                    <div class="center-line"></div>
+                    <div class="center-circle"></div>
+                    <div class="center-dot"></div>
+                    <div class="penalty-box left"></div>
+                    <div class="penalty-box right"></div>
+                </div>
+                <div class="trash-can">🗑️</div>
+                <svg class="draw-layer" viewBox="0 0 750 500" preserveAspectRatio="none">
+                    <defs>
+                        <marker id="arrowhead-1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                            <path d="M 0 0 L 10 5 L 0 10 z" fill="white" />
+                        </marker>
+                    </defs>
+                </svg>
+            </div>
+        </div>
+
+        <div class="field-wrapper" id="wrapper-2" style="display: none; margin-top: 15px;">
+            <div class="field" id="field-2" oncontextmenu="return false;">
+                <svg class="field-logo" viewBox="0 0 500 250" xmlns="http://www.w3.org/2000/svg">
+                    <g font-style="italic" font-family="Arial, sans-serif" transform="skewX(-10)">
+                        <text x="260" y="140" font-size="110" font-weight="900" text-anchor="middle">
+                            <tspan fill="#003366">G</tspan><tspan fill="#f97316">P</tspan><tspan fill="#003366">C</tspan>
+                        </text>
+                        <text x="260" y="185" font-size="32" font-weight="800" fill="#003366" text-anchor="middle" letter-spacing="4">VLISSINGEN</text>
+                    </g>
+                    <g stroke-width="14" stroke-linecap="square">
+                        <line x1="110" y1="0" x2="160" y2="50" stroke="#f97316"/>
+                        <line x1="85" y1="25" x2="135" y2="75" stroke="#003366"/>
+                        <line x1="370" y1="175" x2="420" y2="225" stroke="#f97316"/>
+                        <line x1="345" y1="200" x2="395" y2="250" stroke="#003366"/>
+                    </g>
+                </svg>
+                <div class="pitch-lines">
+                    <div class="center-line"></div>
+                    <div class="center-circle"></div>
+                    <div class="center-dot"></div>
+                    <div class="penalty-box left"></div>
+                    <div class="penalty-box right"></div>
+                </div>
+                <div class="trash-can">🗑️</div>
+                <svg class="draw-layer" viewBox="0 0 750 500" preserveAspectRatio="none">
+                    <defs>
+                        <marker id="arrowhead-2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                            <path d="M 0 0 L 10 5 L 0 10 z" fill="white" />
+                        </marker>
+                    </defs>
+                </svg>
+            </div>
+        </div>
+
+        <div class="field-wrapper" id="wrapper-3" style="display: none; margin-top: 15px;">
+            <div class="field" id="field-3" oncontextmenu="return false;">
+                <svg class="field-logo" viewBox="0 0 500 250" xmlns="http://www.w3.org/2000/svg">
+                    <g font-style="italic" font-family="Arial, sans-serif" transform="skewX(-10)">
+                        <text x="260" y="140" font-size="110" font-weight="900" text-anchor="middle">
+                            <tspan fill="#003366">G</tspan><tspan fill="#f97316">P</tspan><tspan fill="#003366">C</tspan>
+                        </text>
+                        <text x="260" y="185" font-size="32" font-weight="800" fill="#003366" text-anchor="middle" letter-spacing="4">VLISSINGEN</text>
+                    </g>
+                    <g stroke-width="14" stroke-linecap="square">
+                        <line x1="110" y1="0" x2="160" y2="50" stroke="#f97316"/>
+                        <line x1="85" y1="25" x2="135" y2="75" stroke="#003366"/>
+                        <line x1="370" y1="175" x2="420" y2="225" stroke="#f97316"/>
+                        <line x1="345" y1="200" x2="395" y2="250" stroke="#003366"/>
+                    </g>
+                </svg>
+                <div class="pitch-lines">
+                    <div class="center-line"></div>
+                    <div class="center-circle"></div>
+                    <div class="center-dot"></div>
+                    <div class="penalty-box left"></div>
+                    <div class="penalty-box right"></div>
+                </div>
+                <div class="trash-can">🗑️</div>
+                <svg class="draw-layer" viewBox="0 0 750 500" preserveAspectRatio="none">
+                    <defs>
+                        <marker id="arrowhead-3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                            <path d="M 0 0 L 10 5 L 0 10 z" fill="white" />
+                        </marker>
+                    </defs>
+                </svg>
+            </div>
+        </div>
+        
+        <div class="legend">
+            <div>Blauw: <span class="badge" id="count-blue">0</span></div>
+            <div>Geel: <span class="badge" id="count-yellow">0</span></div>
+            <div>Oranje: <span class="badge" id="count-orange">0</span></div>
+            <div>Ballen: <span class="badge" id="count-ball">0</span></div>
+            <div>Goals: <span class="badge" id="count-goal">0</span></div>
+            <div style="display:flex; align-items:center;">
+                Hoedjes: 
+                <div class="cone-dots-container">
+                    <div class="cone-dot" style="background:#ef4444;" id="count-cone_red">0</div>
+                    <div class="cone-dot" style="background:#3b82f6;" id="count-cone_blue">0</div>
+                    <div class="cone-dot" style="background:#facc15; color:black;" id="count-cone_yellow">0</div>
+                    <div class="cone-dot" style="background:#f97316;" id="count-cone_orange">0</div>
+                    <div class="cone-dot" style="background:#22c55e;" id="count-cone_green">0</div>
+                    <div class="cone-dot" style="background:#ffffff; color:black;" id="count-cone_white">0</div>
+                </div>
+            </div>
+        </div>
+        
+        <textarea id="notes-area" placeholder="Typ hier de uitleg of opmerkingen voor de oefening..." oninput="autoResizeTextarea()"></textarea>
+    </div>
+</body>
+</html>
